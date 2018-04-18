@@ -5,4 +5,4 @@ Unsupervised Language Learning: An exploration of semantic representation
 
 - Navigate to the lab1 folder
 - Move the raw models into the raw_model folder
-- All code is in main.ipyn
+- All code is in main.ipynb
