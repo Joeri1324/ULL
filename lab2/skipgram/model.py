@@ -21,10 +21,7 @@ class Embeddings(nn.Module):
 
         chicken = self.word_to_embedding(x) @ self.embedding_to_context(y).view(-1, 1)
 
-        
-
-
-
+    
         vocab_size = self.embedding_to_context.weight.size()[0]
         # should use word frequency for this
         negative_samples = torch.LongTensor([int(i) for i in 
