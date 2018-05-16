@@ -13,27 +13,24 @@ class Embeddings(nn.Module):
         self.embedding_to_context = nn.Embedding(vocab_size, embedding_size, sparse=True)
         self.negative_sampler = torch.distributions.uniform.Uniform(torch.tensor([0]), torch.tensor([vocab_size]))
 
-    def forward(self, x, y):
-        # positive
-        positive_output = - F.logsigmoid(
-            self.word_to_embedding(x) @ self.embedding_to_context(y).view(-1, 1)
-        )
-
-        chicken = self.word_to_embedding(x) @ self.embedding_to_context(y).view(-1, 1)
-
-    
-        vocab_size = self.embedding_to_context.weight.size()[0]
-        # should use word frequency for this
-        negative_samples = torch.LongTensor([int(i) for i in 
+    def get_negative_samples(self, vocab_size):
+        return torch.LongTensor([int(i) for i in 
             torch.Tensor(NEGATIVE_SAMPLE_SIZE).random_(to=vocab_size)
         ])
-        fish = self.embedding_to_context(negative_samples).neg() @  self.word_to_embedding(x).view(-1, 1)
 
+    ## TODO: think of a way to make it a subset excluding the x's
+    def forward(self, x, y):
+        # positive
+        x_embeddings = self.word_to_embedding(x)
+        y_embeddings = self.embedding_to_context(y)
+        batch_size, emb_size = x_embeddings.size()
+        positive_output = - F.logsigmoid(torch.diag(x_embeddings @ y_embeddings.view(emb_size, batch_size)))
 
-        negative_output = - F.logsigmoid(
-            self.embedding_to_context(negative_samples).neg() @  self.word_to_embedding(x).view(-1, 1)
-        )
-        return (positive_output + negative_output.sum())
+        vocab_size = self.embedding_to_context.weight.size()[0]
+        negative_samples = self.get_negative_samples(vocab_size)
+        negative_embeddings = self.embedding_to_context(negative_samples).neg()
+        negative_output = - F.logsigmoid(negative_embeddings @  x_embeddings.view(emb_size, batch_size))
+        return (positive_output.mean() + negative_output.sum())
 
     def most_similar(self, index):
         vector = self.word_to_embedding.weight[:, index]

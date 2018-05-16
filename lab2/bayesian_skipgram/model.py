@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributions as dist
-
+import torch.distributions.multivariate_normal as normal
+import torch.distributions.kl as kl
+from itertools import product
 
 NEGATIVE_SAMPLE_SIZE = 10
 
@@ -21,7 +22,18 @@ class BayesianSkipgram(nn.Module):
         self.prior_mus = nn.Embedding(vocab_size, context_size)
         self.prior_sigmas = nn.Embedding(vocab_size, context_size)
 
-        self.negative_sampler = torch.distributions.uniform.Uniform(torch.tensor([0]), torch.tensor([vocab_size]))
+    def most_similar(self, index):
+        p_covariance = torch.diagflat(self.prior_sigmas(index) * self.prior_sigmas(index))
+        p_index = normal.MultivariateNormal(self.prior_mus(index), covariance_matrix=p_covariance)
+        vocab_size = self.Embedding.weight.size()[0]
+
+        def calc(p_index, i):
+            i = torch.LongTensor([i])
+            covariance = torch.diagflat(self.prior_sigmas(i) * self.prior_sigmas(i))
+            p = normal.MultivariateNormal(self.prior_mus(i), covariance_matrix=covariance)
+            return (i, kl.kl_divergence(p_index, p))
+
+        return min([calc(p_index, i) for i in range(vocab_size)], key=lambda x: x[1])
 
     def forward(self, x, context):
 
@@ -31,33 +43,25 @@ class BayesianSkipgram(nn.Module):
         h = F.relu(torch.cat((Rw, Rc), 1)).sum(0)
         mu = self.U(h)
         sigma = F.softplus(self.W(h))
+        covariance = torch.diagflat(self.prior_sigmas(x) * self.prior_sigmas(x))
 
-        prior = dist.multivariate_normal.MultivariateNormal(
-            self.prior_mus(x),
-            covariance_matrix=torch.diagflat(torch.mul(self.prior_sigmas(x), self.prior_sigmas(x)))
-        )
-        posterior = dist.multivariate_normal.MultivariateNormal(
-            mu,
-            covariance_matrix=torch.diagflat(sigma)
-        )
+        prior = normal.MultivariateNormal(self.prior_mus(x), covariance_matrix=covariance)
+        posterior = normal.MultivariateNormal(mu, covariance_matrix=torch.diagflat(sigma))
         vocab_size = self.Embedding.weight.size()[0]
 
-        likelihood = 0
-        for j in context:
-            positive = dist.multivariate_normal.MultivariateNormal(
-                self.prior_mus(j),
-                covariance_matrix=torch.diagflat(torch.mul(self.prior_sigmas(j), self.prior_sigmas(j)))
-            )
-            negative_samples = torch.LongTensor([int(i) for i in 
-                torch.Tensor(NEGATIVE_SAMPLE_SIZE).random_(to=vocab_size)
-            ])
-            for k in negative_samples:
+        negative_samples = torch.LongTensor([int(i) for i in 
+            torch.Tensor(NEGATIVE_SAMPLE_SIZE).random_(to=vocab_size)
+        ])
 
-                negative = dist.multivariate_normal.MultivariateNormal(
-                    self.prior_mus(k),
-                    covariance_matrix=torch.diagflat(torch.mul(self.prior_sigmas(k), self.prior_sigmas(k)))
-                )
-                likelihood += max(0, dist.kl.kl_divergence(posterior, negative)
-                                  - dist.kl.kl_divergence(posterior, positive) + 1) 
-                                  # 1 should b m for batches
-        return likelihood - dist.kl.kl_divergence(posterior, prior)
+        def compute_likelihood(j, k):
+            j_sigma = self.prior_sigmas(j)
+            j_covariance = torch.diagflat(j_sigma * j_sigma)
+            positive = normal.MultivariateNormal(self.prior_mus(j), covariance_matrix=j_covariance)
+            k_sigma = self.prior_sigmas(k)
+            k_covariance = torch.diagflat(k_sigma * k_sigma)
+            negative = normal.MultivariateNormal(self.prior_mus(k), covariance_matrix=k_covariance)
+            return max(0,  kl.kl_divergence(posterior, positive) - kl.kl_divergence(posterior, negative) + 1) 
+            
+        likelihood = sum(compute_likelihood(j, k) for j, k in product(context, negative_samples))
+
+        return  kl.kl_divergence(posterior, prior) + likelihood, kl.kl_divergence(posterior, prior)

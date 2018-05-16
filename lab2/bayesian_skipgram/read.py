@@ -13,7 +13,9 @@ def read_context_wise(file_name, context_window_size, filters):
                 )
 
                 # didn't do the filters yet
-                yield word, [splitted_line[j] for j in context_window_indices]
+                c = [splitted_line[j] for j in context_window_indices]
+                if len(c) > 0:
+                    yield word, c
 
 def read_vocab(file_name, filters):
     seen = {}
