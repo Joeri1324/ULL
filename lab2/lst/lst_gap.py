@@ -15,6 +15,7 @@ from generalized_average_precision import GeneralizedAveragePrecision
 def read_gold_line(gold_line, ignore_mwe):
     segments = gold_line.split("::")
     instance_id = segments[0].strip()
+    # print("gold name", instance_id)
     gold_weights = []
     line_candidates = segments[1].strip().split(';')
     for candidate_count in line_candidates:
@@ -40,7 +41,7 @@ def read_eval_line(eval_line):
     segments = eval_line.split("\t")
     #print(segments)
     instance_id = segments[1].strip()
-    #print(instance_id)
+    # print("eval name", instance_id)
     for candidate_weight in segments[2:]:
         if len(candidate_weight) > 0:
             delimiter_ind = candidate_weight.rfind(' ')
@@ -83,8 +84,9 @@ if __name__ == '__main__':
     sum_gap = 0.0
     for eval_line in eval_file:
         eval_instance_id, eval_weights = read_eval_line(eval_line)
-        #print(eval_instance_id, eval_weights)
+        # print(eval_instance_id, eval_weights)
         eval_data[eval_instance_id] = eval_weights
+
         
     for gold_line in gold_file:
         gold_instance_id, gold_weights = read_gold_line(gold_line, ignore_mwe)
@@ -92,8 +94,12 @@ if __name__ == '__main__':
         
     ignored = 0
     for gold_instance_id, gold_weights in gold_data.items():
-        #print(gold_instance_id)
-        eval_weights = eval_data[gold_instance_id]      
+        # print(gold_instance_id)
+        # print(eval_data)
+        try:
+            eval_weights = eval_data[gold_instance_id]
+        except:
+            print("key error:", gold_instance_id)      
         gap = GeneralizedAveragePrecision.calc(gold_weights, eval_weights, randomize)
         if (gap < 0): # this happens when there is nothing left to rank after filtering the multi-word expressions
             ignored += 1

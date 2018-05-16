@@ -31,7 +31,7 @@ class GeneralizedAveragePrecision(object):
         gold_map = {}
         for [key, value] in gold_vector:
             gold_map[key]=value
-        sorted_gold_vector =g sorted(gold_vector, key=itemgetter(1), reverse=True)          
+        sorted_gold_vector = sorted(gold_vector, key=itemgetter(1), reverse=True)          
         gold_vector_accumulated = GeneralizedAveragePrecision.accumulate_score(sorted_gold_vector)
 
 
