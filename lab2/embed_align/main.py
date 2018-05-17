@@ -3,8 +3,8 @@ from model import AlignedEmbeddings
 import torch.optim as optim
 import torch
 
-FILE_L1 = './training.en'
-FILE_L2 = './training.fr'
+FILE_L1 = '../data/dev.en'
+FILE_L2 = '../data/dev.fr'
 
 vocab_l1 = {w: i for i, w in enumerate(read_vocab(FILE_L1, []))}
 vocab_l2 = {w: i for i, w in enumerate(read_vocab(FILE_L2, []))}
@@ -26,4 +26,5 @@ def train():
         optimizer.step()
     print('loss', torch.mean(torch.Tensor(losses)))
 
-train()
+for _ in range(10):
+    train()

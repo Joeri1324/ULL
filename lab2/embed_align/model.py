@@ -37,22 +37,21 @@ class AlignedEmbeddings(nn.Module):
         zeros = torch.zeros(dim)
 
         kl_loss = sum(get_kl(mu, sigma, zeros, I) for mu, sigma in zip(u, s))
-
         loss = - kl_loss
         for mu, sigma, word in zip(u, s, words_l1):
-            ### here do the log P(xi|zi)
             covariance = torch.diagflat(sigma * sigma)
             dist = normal.MultivariateNormal(mu, covariance_matrix=covariance)
 
             z = dist.sample()
-            loss += F.log_softmax(self.f(z), dim=1)[0, word]
+            loss += F.softmax(self.f(z), dim=1)[0, word]
 
         for word in words_l2:
+            l  = 0
             for mu, sigma in zip(u, s):
                 covariance = torch.diagflat(sigma * sigma)
                 dist = normal.MultivariateNormal(mu, covariance_matrix=covariance)
 
                 z = dist.sample()
-                loss += 1 / len(words_l2) * F.log_softmax(self.g(z), dim=1)[0, word] 
-
-        return loss
+                l += 1 / len(words_l2) * F.softmax(self.g(z), dim=1)[0, word] 
+            loss += l
+        return - loss + kl_loss

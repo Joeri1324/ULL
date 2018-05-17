@@ -11,30 +11,36 @@ class Embeddings(nn.Module):
         super(Embeddings, self).__init__()
         self.word_to_embedding = nn.Embedding(vocab_size, embedding_size, sparse=True)
         self.embedding_to_context = nn.Embedding(vocab_size, embedding_size, sparse=True)
-        self.negative_sampler = torch.distributions.uniform.Uniform(torch.tensor([0]), torch.tensor([vocab_size]))
 
     def get_negative_samples(self, vocab_size):
         return torch.LongTensor([int(i) for i in 
             torch.Tensor(NEGATIVE_SAMPLE_SIZE).random_(to=vocab_size)
         ])
 
-    ## TODO: think of a way to make it a subset excluding the x's
     def forward(self, x, y):
-        # positive
         x_embeddings = self.word_to_embedding(x)
-        y_embeddings = self.embedding_to_context(y)
         batch_size, emb_size = x_embeddings.size()
-        positive_output = - F.logsigmoid(torch.diag(x_embeddings @ y_embeddings.view(emb_size, batch_size)))
+        x_embeddings = x_embeddings.view(batch_size, 1, emb_size)
+        y_embeddings = self.embedding_to_context(y).view(batch_size, emb_size, 1)
+
+        positive_output = F.logsigmoid(
+            x_embeddings @ 
+            y_embeddings
+        ).view(-1, 1)
 
         vocab_size = self.embedding_to_context.weight.size()[0]
         negative_samples = self.get_negative_samples(vocab_size)
         negative_embeddings = self.embedding_to_context(negative_samples).neg()
-        negative_output = - F.logsigmoid(negative_embeddings @  x_embeddings.view(emb_size, batch_size))
-        return (positive_output.mean() + negative_output.sum())
+        negative_output = F.logsigmoid(
+            negative_embeddings @
+             x_embeddings.view(batch_size, emb_size, 1)
+        ).sum(1)
+        return - (positive_output + negative_output).mean()
 
-    def most_similar(self, index):
-        vector = self.word_to_embedding.weight[:, index]
-        most_similar = cosine_similarity(vector.detach().reshape(1, -1),
-            self.word_to_embedding.weight.detach().numpy().T).argsort()
+    def most_similar(self, index, n_samples):
+        vector = self.word_to_embedding.weight[index, :]
+        cosine_scores = cosine_similarity(vector.detach().reshape(1, -1),
+            self.word_to_embedding.weight.detach().numpy())
 
-        return most_similar[0, -2]
+        indices = list(reversed(cosine_scores.argsort()[0]))[2:n_samples+1]
+        return indices, list(cosine_scores[0, indices])

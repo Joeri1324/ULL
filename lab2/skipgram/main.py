@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch
 
 EMBEDDINGS_SIZE = 50
-FILE = '../data/training.en'
+FILE = '../data/dev.en'
 
 vocab = {w: i for i, w in enumerate(read_vocab(FILE, []))}
 model = Embeddings(EMBEDDINGS_SIZE, len(vocab))
@@ -26,7 +26,7 @@ def train():
         i += 1
     return torch.mean(torch.tensor(losses))
 
-for _ in range(500):
+for _ in range(1):
     print('Loss:', train())
 
-
+print(model.most_similar(40, 20))
